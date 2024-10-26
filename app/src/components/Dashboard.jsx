@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Shield } from 'lucide-react';
 import Gmail from './Gmail';
 
-// Utility functions
+// Risk score calculator
 const calculateRiskScore = (emails) => {
   let score = 100;
   emails.forEach(email => {
@@ -61,35 +61,35 @@ function SecurityDashboard({ gapi }) {
 
 
   // Helper function 
-  const moveToFolder = async (emailId, folderName) => {
-    try {
-      await gapi.client.gmail.users.messages.modify({
-        userId: 'me',
-        id: emailId,
-        resource: {
-          addLabelIds: [folderName],
-        },
-      });
-    } catch (error) {
-      console.error('Error moving email:', error);
-    }
-  };
+  // const moveToFolder = async (emailId, folderName) => {
+  //   try {
+  //     await gapi.client.gmail.users.messages.modify({
+  //       userId: 'me',
+  //       id: emailId,
+  //       resource: {
+  //         addLabelIds: [folderName],
+  //       },
+  //     });
+  //   } catch (error) {
+  //     console.error('Error moving email:', error);
+  //   }
+  // };
 
 
   // Helper function
-  const addLabel = async (emailId, labelName) => {
-    try {
-      await gapi.client.gmail.users.messages.modify({
-        userId: 'me',
-        id: emailId,
-        resource: {
-          addLabelIds: [labelName],
-        },
-      });
-    } catch (error) {
-      console.error('Error adding label:', error);
-    }
-  };
+  // const addLabel = async (emailId, labelName) => {
+  //   try {
+  //     await gapi.client.gmail.users.messages.modify({
+  //       userId: 'me',
+  //       id: emailId,
+  //       resource: {
+  //         addLabelIds: [labelName],
+  //       },
+  //     });
+  //   } catch (error) {
+  //     console.error('Error adding label:', error);
+  //   }
+  // };
 
 
 
