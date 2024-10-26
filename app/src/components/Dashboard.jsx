@@ -58,6 +58,9 @@ function SecurityDashboard({ gapi }) {
     setFirstTimeSenders(newSenders);
   };
 
+
+
+  // Helper function 
   const moveToFolder = async (emailId, folderName) => {
     try {
       await gapi.client.gmail.users.messages.modify({
@@ -73,7 +76,7 @@ function SecurityDashboard({ gapi }) {
   };
 
 
-
+  // Helper function
   const addLabel = async (emailId, labelName) => {
     try {
       await gapi.client.gmail.users.messages.modify({
@@ -142,9 +145,6 @@ function SecurityDashboard({ gapi }) {
           />
         </div>
       </div>
-
-
-
       Patterns View
       {activeView === 'patterns' && (
         <div className="p-4 border rounded-lg">

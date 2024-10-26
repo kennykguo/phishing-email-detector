@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { gapi } from 'gapi-script';
 
-const CLIENT_ID = '284401762274-9japsbb9v3n35hgqupkrg8j9fnhpbvub.apps.googleusercontent.com';
-const API_KEY = 'AIzaSyAkHZSjjDzvwI5QZdyDJt0Lkkf4Ij_dZ9o';
-const SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
-const MAX_EMAILS = 10;
+// Import the environment variables
+const CLIENT_ID = import.meta.env.VITE_CLIENT_ID;
+const API_KEY = import.meta.env.VITE_API_KEY;
+const SCOPES = import.meta.env.VITE_SCOPES;
+const MAX_EMAILS = parseInt(import.meta.env.VITE_MAX_EMAILS, 10) || 10; // Default to 10 if not set
 
+// Sets up the Gmail client
 function Gmail({ onEmailsReceived, onError }) {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [emails, setEmails] = useState([]);
@@ -39,6 +41,7 @@ function Gmail({ onEmailsReceived, onError }) {
     if (onEmailsReceived) onEmailsReceived([]);
   };
 
+  // Gets the emails list
   const fetchEmails = async () => {
     if (isSignedIn) {
       try {
@@ -77,9 +80,10 @@ function Gmail({ onEmailsReceived, onError }) {
     }
   };
 
+  // Main component that renders everything
   return (
     <div className="p-4 border rounded-lg">
-      <h2 className="font-semibold mb-4">Email Management</h2>
+      <h2 className="font-semibold mb-4">Gmail Emails</h2>
       {isSignedIn ? (
         <div className="space-y-4">
           <div className="flex gap-4">
