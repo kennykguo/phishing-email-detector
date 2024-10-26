@@ -13,6 +13,8 @@ const calculateRiskScore = (emails) => {
   return Math.max(0, score);
 };
 
+
+
 // Main Dashboard Component
 function SecurityDashboard({ gapi }) {
   const [riskScore, setRiskScore] = useState(0);
@@ -70,6 +72,8 @@ function SecurityDashboard({ gapi }) {
     }
   };
 
+
+
   const addLabel = async (emailId, labelName) => {
     try {
       await gapi.client.gmail.users.messages.modify({
@@ -84,6 +88,8 @@ function SecurityDashboard({ gapi }) {
     }
   };
 
+
+
   return (
     <div className="p-4 space-y-6">
       {/* Gmail Component */}
@@ -92,6 +98,8 @@ function SecurityDashboard({ gapi }) {
         onEmailsReceived={handleEmailsReceived}
         onError={handleError}
       />
+
+
 
       {/* Navigation */}
       <div className="flex gap-4">
@@ -115,6 +123,8 @@ function SecurityDashboard({ gapi }) {
         </button>
       </div>
 
+
+
       {/* Risk Score Section */}
       <div className="p-4 border rounded-lg">
         <div className="flex items-center gap-2">
@@ -133,7 +143,9 @@ function SecurityDashboard({ gapi }) {
         </div>
       </div>
 
-      {/* Patterns View */}
+
+
+      Patterns View
       {activeView === 'patterns' && (
         <div className="p-4 border rounded-lg">
           <h2 className="font-semibold">Email Activity Patterns</h2>
@@ -156,8 +168,13 @@ function SecurityDashboard({ gapi }) {
         </div>
       )}
 
+
+
       {/* Quiz View */}
       {activeView === 'quiz' && <SecurityQuiz />}
+
+
+
 
       {/* First Time Senders */}
       <div className="p-4 border rounded-lg">
@@ -190,9 +207,13 @@ function SecurityDashboard({ gapi }) {
           ))}
         </div>
       </div>
+
+
     </div>
   );
 }
+
+
 
 // Security Quiz Component
 function SecurityQuiz() {
