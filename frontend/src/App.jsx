@@ -23,7 +23,7 @@ function App() {
     <div className="bg-gray-900 min-h-screen text-white">
       <Navbar />
       <div className="container mx-auto p-4">
-        <h1 className="text-4xl font-bold text-center mb-6">Email Security Dashboard</h1>
+        {/* <h1 className="text-4xl font-bold text-center mb-6">Email Security Dashboard</h1> */}
         <SecurityDashboard gapi={gapi} />
       </div>
     </div>

@@ -158,12 +158,15 @@ function SecurityDashboard({ gapi }) {
         removeLabelIds: [],
         addLabelIds: ['SPAM']
       }
-    }).then(() => {
-      setFirstTimeSenders(prev => prev.filter(email => email.id !== emailId));
-      console.log('Moved to spam:', emailId);
-    }).catch(error => {
-      console.error('Failed to move to spam:', error);
-    });
+    })
+      .then(() => {
+        // Update UI to reflect that the email was marked as spam
+        setEmails(prevEmails => prevEmails.filter(email => email.id !== emailId));
+        console.log('Moved to spam:', emailId);
+      })
+      .catch(error => {
+        console.error('Failed to move to spam:', error);
+      });
   };
 
   // Calculate pagination values
@@ -188,18 +191,16 @@ function SecurityDashboard({ gapi }) {
 
   return (
     <div className="min-h-screen bg-gray-900 p-6 text-gray-100">
+        <Gmail 
+          gapi={gapi}
+          onEmailsReceived={handleEmailsReceived}
+          onError={(error) => console.error('Gmail error:', error)}
+        />
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Gmail Integration */}
-        <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-          <Gmail 
-            gapi={gapi}
-            onEmailsReceived={handleEmailsReceived}
-            onError={(error) => console.error('Gmail error:', error)}
-          />
-        </div>
 
         {/* Navigation Tabs */}
-        <div className="flex gap-2">
+        {/* <div className="flex gap-2">
           {['overview'].map((view) => (
             <button
               key={view}
@@ -213,7 +214,7 @@ function SecurityDashboard({ gapi }) {
               {view.charAt(0).toUpperCase() + view.slice(1)}
             </button>
           ))}
-        </div>
+        </div> */}
 
         {/* Security Score Card */}
         <div className="bg-gray-800 rounded-lg border border-gray-700">
@@ -312,43 +313,48 @@ function SecurityDashboard({ gapi }) {
                 </div>
               ) : (
                 <div className="grid gap-4">
-                  {currentItems.map((email, index) => {
-                    const result = inferenceResults[emails.indexOf(email)];
-                    const isPhishing = result && result.phishing > result.not_phishing;
-                    return (
-                      <div 
-                        key={index}
-                        className={`p-4 rounded-lg border transition-all duration-200 ${
-                          isPhishing 
-                            ? 'bg-red-900/30 border-red-800 hover:bg-red-900/40' 
-                            : 'bg-green-900/30 border-green-800 hover:bg-green-900/40'
-                        }`}
-                      >
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-start">
-                            <h3 className="font-medium text-gray-100">{email.sender}</h3>
-                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                              isPhishing 
-                                ? 'bg-red-900 text-red-300' 
-                                : 'bg-green-900 text-green-300'
-                            }`}>
-                              {isPhishing ? 'Potential Threat' : 'Safe'}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-400">
-                            {new Date(email.date).toLocaleString()}
-                          </p>
-                          <p className="text-sm font-medium text-gray-300">
-                            {email.subject}
-                          </p>
-                          <p className="text-sm text-gray-400 line-clamp-2">
-                            {email.snippet}
-                          </p>
+                {currentItems.map((email, index) => {
+                  const result = inferenceResults[emails.indexOf(email)];
+                  const isPhishing = result && result.phishing > result.not_phishing;
+                  return (
+                    <div 
+                      key={index}
+                      className={`p-4 rounded-lg border transition-all duration-200 ${
+                        isPhishing 
+                          ? 'bg-red-900/30 border-red-800 hover:bg-red-900/40' 
+                          : 'bg-green-900/30 border-green-800 hover:bg-green-900/40'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start">
+                          <h3 className="font-medium text-gray-100">{email.sender}</h3>
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            isPhishing 
+                              ? 'bg-red-900 text-red-300' 
+                              : 'bg-green-900 text-green-300'
+                          }`}>
+                            {isPhishing ? 'Potential Threat' : 'Safe'}
+                          </span>
                         </div>
+                        {isPhishing && (
+                          <button
+                            onClick={() => handleMoveToSpam(email.id)}
+                            className="mt-2 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors float-right"
+                          >
+                            Mark as Spam
+                          </button>
+                        )}
+                        <p className="text-sm text-gray-400">{new Date(email.date).toLocaleString()}</p>
+                        <p className="text-sm font-medium text-gray-300">{email.subject}</p>
+                        <p className="text-sm text-gray-400 line-clamp-2">{email.snippet}</p>
+                        
                       </div>
-                    );
-                  })}
-                </div>
+
+
+                    </div>
+                  );
+                })}
+              </div>
               )}
 
               

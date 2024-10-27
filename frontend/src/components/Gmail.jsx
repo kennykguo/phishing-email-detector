@@ -83,46 +83,48 @@ function Gmail({ onEmailsReceived, onError }) {
 
   
   // Main component that renders everything
-  return (
-    <div className="p-4 border rounded-lg">
-      <h2 className="font-semibold mb-4">Gmail Emails</h2>
-      {isSignedIn ? (
-        <div className="space-y-4">
-          <div className="flex gap-4">
-            <button 
-              onClick={handleSignOut}
-              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-            >
-              Sign Out
-            </button>
-            <button 
-              onClick={fetchEmails}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              Fetch Emails
-            </button>
-          </div>
-          <div className="space-y-4">
-            {/* {emails.map((email, index) => (
-              <div key={index} className="p-4 border rounded-lg">
-                <p><strong>Sender:</strong> {email.sender}</p>
-                <p><strong>Subject:</strong> {email.subject}</p>
-                <p><strong>Date:</strong> {email.date}</p>
-                <p><strong>Preview:</strong> {email.snippet}</p>
-              </div>
-            ))} */}
-          </div>
-        </div>
-      ) : (
+  // Main component that renders everything
+return (
+  <div className="p-4">
+    {/* <h2 className="font-semibold mb-4">Gmail Emails</h2> */}
+    {isSignedIn ? (
+      <div className="space-y-4">
+        <div className="flex gap-4 justify-end"> {/* Aligns buttons to the right */}
         <button 
-          onClick={handleSignIn}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          onClick={handleSignOut}
+          className="px-6 py-3 bg-red-600 text-white rounded-lg shadow-md hover:bg-red-700 transition duration-300 transform hover:scale-105"
         >
-          Sign In with Google
+          Sign Out
         </button>
-      )}
-    </div>
-  );
+        <button 
+          onClick={fetchEmails}
+          className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition duration-300 transform hover:scale-105"
+        >
+          Fetch Emails
+        </button>
+        </div>
+        <div className="space-y-4">
+          {/* {emails.map((email, index) => (
+            <div key={index} className="p-4 border rounded-lg">
+              <p><strong>Sender:</strong> {email.sender}</p>
+              <p><strong>Subject:</strong> {email.subject}</p>
+              <p><strong>Date:</strong> {email.date}</p>
+              <p><strong>Preview:</strong> {email.snippet}</p>
+            </div>
+          ))} */}
+        </div>
+      </div>
+    ) : (
+      <button 
+        onClick={handleSignIn}
+        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+      >
+        Sign In with Google
+      </button>
+    )}
+  </div>
+);
+
 }
 
 export default Gmail;
