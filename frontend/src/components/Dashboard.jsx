@@ -1,16 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Shield } from 'lucide-react';
+import { AlertTriangle, Shield, Search, Clock } from 'lucide-react';
 import Gmail from './Gmail';
 
 const calculateRiskScore = (inferenceResults) => {
-  if (inferenceResults.length === 0) return 100; // Return full score if no emails
-  
-  // Count how many emails were identified as phishing
+  if (inferenceResults.length === 0) return 100;
   const phishedCount = inferenceResults.filter(result => result.phishing > result.not_phishing).length;
-  
-  // Calculate the risk score based on the average number of phished emails
-  const averageRiskScore = Math.max(0, 100 - (phishedCount * 10)); // Decrease score by 10 for each phished email
-  
+  const averageRiskScore = Math.max(0, 100 - (phishedCount * 10));
+  console.log(inferenceResults);
   return phishedCount / inferenceResults.length * 100;
 };
 
@@ -21,6 +17,22 @@ function SecurityDashboard({ gapi }) {
   const [firstTimeSenders, setFirstTimeSenders] = useState([]);
   const [emails, setEmails] = useState([]);
   const [inferenceResults, setInferenceResults] = useState([]);
+  
+  // Pagination and search states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredEmails, setFilteredEmails] = useState([]);
+  const itemsPerPage = 5;
+
+  useEffect(() => {
+    const filtered = emails.filter(email =>
+      email.sender.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      email.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      email.snippet.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredEmails(filtered);
+    setCurrentPage(1);
+  }, [searchTerm, emails]);
 
   const handleEmailsReceived = async (messages) => {
     const processedEmails = await Promise.all(messages.map(async (message) => {
@@ -33,7 +45,7 @@ function SecurityDashboard({ gapi }) {
 
         const email = response.result;
         const headers = email.payload.headers;
-        const rawText = getEmailBodyText(email.payload); // Extract raw text
+        const rawText = getEmailBodyText(email.payload);
 
         return {
           id: email.id,
@@ -122,7 +134,7 @@ function SecurityDashboard({ gapi }) {
       }));
 
       setInferenceResults(results);
-      setRiskScore(calculateRiskScore(results)); // Update risk score based on inference results
+      setRiskScore(calculateRiskScore(results));
     }
   };
 
@@ -141,6 +153,15 @@ function SecurityDashboard({ gapi }) {
       console.error('Failed to move to spam:', error);
     });
   };
+
+  // Calculate pagination values
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredEmails.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredEmails.length / itemsPerPage);
+
+  // Pagination controls
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   return (
     <div className="min-h-screen bg-gray-900 p-6 text-gray-100">
@@ -228,50 +249,101 @@ function SecurityDashboard({ gapi }) {
 
         {activeView === 'quiz' && <SecurityQuiz />}
 
-        {/* Inference Results */}
+        {/* Inference Results with Search and Pagination */}
         <div className="bg-gray-800 rounded-lg border border-gray-700">
           <div className="p-6">
-            <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
-              <AlertTriangle className="h-5 w-5 text-blue-400" />
-              Email Analysis Results
-            </h2>
-            <div className="grid gap-4">
-              {emails.map((email, index) => {
-                const result = inferenceResults[index];
-                const isPhishing = result && result.phishing > result.not_phishing;
-                return (
-                  <div 
-                    key={index}
-                    className={`p-4 rounded-lg border transition-all duration-200 ${
-                      isPhishing 
-                        ? 'bg-red-900/30 border-red-800 hover:bg-red-900/40' 
-                        : 'bg-green-900/30 border-green-800 hover:bg-green-900/40'
-                    }`}
-                  >
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-start">
-                        <h3 className="font-medium text-gray-100">{email.sender}</h3>
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                          isPhishing 
-                            ? 'bg-red-900 text-red-300' 
-                            : 'bg-green-900 text-green-300'
-                        }`}>
-                          {isPhishing ? 'Potential Threat' : 'Safe'}
-                        </span>
+            <div className="flex flex-col gap-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-blue-400" />
+                  Email Analysis Results
+                </h2>
+                
+                {/* Search Bar */}
+                <div className="relative">
+                  <Search className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search emails..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 pr-4 py-2 rounded-lg bg-gray-700 border border-gray-600 text-gray-100 focus:outline-none focus:border-blue-500 w-64"
+                  />
+                </div>
+              </div>
+
+              {/* Email List */}
+              <div className="grid gap-4">
+                {currentItems.map((email, index) => {
+                  const result = inferenceResults[emails.indexOf(email)];
+                  const isPhishing = result && result.phishing > result.not_phishing;
+                  return (
+                    <div 
+                      key={index}
+                      className={`p-4 rounded-lg border transition-all duration-200 ${
+                        isPhishing 
+                          ? 'bg-red-900/30 border-red-800 hover:bg-red-900/40' 
+                          : 'bg-green-900/30 border-green-800 hover:bg-green-900/40'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start">
+                          <h3 className="font-medium text-gray-100">{email.sender}</h3>
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            isPhishing 
+                              ? 'bg-red-900 text-red-300' 
+                              : 'bg-green-900 text-green-300'
+                          }`}>
+                            {isPhishing ? 'Potential Threat' : 'Safe'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-400">
+                          {new Date(email.date).toLocaleString()}
+                        </p>
+                        <p className="text-sm font-medium text-gray-300">
+                          {email.subject}
+                        </p>
+                        <p className="text-sm text-gray-400 line-clamp-2">
+                          {email.snippet}
+                        </p>
                       </div>
-                      <p className="text-sm text-gray-400">
-                        {new Date(email.date).toLocaleString()}
-                      </p>
-                      <p className="text-sm font-medium text-gray-300">
-                        {email.subject}
-                      </p>
-                      <p className="text-sm text-gray-400 line-clamp-2">
-                        {email.snippet}
-                      </p>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex justify-center gap-2 mt-4">
+                  <button
+                    onClick={() => paginate(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 rounded-lg bg-gray-700 text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+                  >
+                    Previous
+                  </button>
+                  {[...Array(totalPages)].map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => paginate(index + 1)}
+                      className={`px-4 py-2 rounded-lg ${
+                        currentPage === index + 1
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      {index + 1}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => paginate(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-4 py-2 rounded-lg bg-gray-700 text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
