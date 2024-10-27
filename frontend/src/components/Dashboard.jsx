@@ -2,44 +2,86 @@ import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Shield } from 'lucide-react';
 import Gmail from './Gmail';
 
-// Risk score calculator
-const calculateRiskScore = (emails) => {
-  let score = 100;
-  emails.forEach(email => {
-    if (email.sender.includes('unknown')) score -= 10;
-    if (email.subject.toLowerCase().includes('urgent')) score -= 5;
-    if (email.snippet.toLowerCase().includes('password')) score -= 15;
-  });
-  return Math.max(0, score);
+const calculateRiskScore = (inferenceResults) => {
+  if (inferenceResults.length === 0) return 100; // Return full score if no emails
+  
+  // Count how many emails were identified as phishing
+  const phishedCount = inferenceResults.filter(result => result.phishing > result.not_phishing).length;
+  
+  // Calculate the risk score based on the average number of phished emails
+  const averageRiskScore = Math.max(0, 100 - (phishedCount * 10)); // Decrease score by 10 for each phished email
+  
+  return phishedCount / inferenceResults.length * 100;
 };
 
-// Main Dashboard Component
 function SecurityDashboard({ gapi }) {
   const [riskScore, setRiskScore] = useState(0);
   const [activeView, setActiveView] = useState('overview');
   const [patterns, setPatterns] = useState([]);
   const [firstTimeSenders, setFirstTimeSenders] = useState([]);
   const [emails, setEmails] = useState([]);
-  const [inferenceResults, setInferenceResults] = useState([]); // Store inference results
+  const [inferenceResults, setInferenceResults] = useState([]);
 
-  // Gmail callback handlers
-  const handleEmailsReceived = (receivedEmails) => {
-    setEmails(receivedEmails);
-    if (receivedEmails.length > 0) {
-      setRiskScore(calculateRiskScore(receivedEmails));
-      analyzeEmails(receivedEmails);
+  const handleEmailsReceived = async (messages) => {
+    const processedEmails = await Promise.all(messages.map(async (message) => {
+      try {
+        const response = await gapi.client.gmail.users.messages.get({
+          userId: 'me',
+          id: message.id,
+          format: 'full'
+        });
+
+        const email = response.result;
+        const headers = email.payload.headers;
+        const rawText = getEmailBodyText(email.payload); // Extract raw text
+
+        return {
+          id: email.id,
+          sender: headers.find(h => h.name === 'From')?.value || 'unknown',
+          subject: headers.find(h => h.name === 'Subject')?.value || '(no subject)',
+          date: headers.find(h => h.name === 'Date')?.value || '',
+          snippet: rawText || ''
+        };
+      } catch (error) {
+        console.error('Error processing email:', error);
+        return null;
+      }
+    }));
+
+    const validEmails = processedEmails.filter(email => email !== null);
+    setEmails(validEmails);
+    
+    if (validEmails.length > 0) {
+      analyzeEmails(validEmails);
     }
   };
 
-  const handleError = (error) => {
-    console.error('Gmail error:', error);
+  const getEmailBodyText = (payload) => {
+    const parts = payload.parts || [];
+    const htmlPart = parts.find(part => part.mimeType === 'text/html');
+    if (htmlPart && htmlPart.body && htmlPart.body.data) {
+      const htmlContent = decodeBase64(htmlPart.body.data);
+      return stripHtml(htmlContent);
+    }
+    const plainPart = parts.find(part => part.mimeType === 'text/plain');
+    if (plainPart && plainPart.body && plainPart.body.data) {
+      return decodeBase64(plainPart.body.data);
+    }
+    return 'No body found';
+  };
+
+  const decodeBase64 = (data) => {
+    return decodeURIComponent(escape(window.atob(data.replace(/-/g, '+').replace(/_/g, '/'))));
+  };
+
+  const stripHtml = (html) => {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return doc.body.textContent || '';
   };
 
   const analyzeEmails = async (emails) => {
-    // Create hourly pattern data
     const patternData = {};
     emails.forEach(email => {
-      console.log(email);
       const hour = new Date(email.date).getHours();
       patternData[hour] = (patternData[hour] || 0) + 1;
     });
@@ -51,226 +93,188 @@ function SecurityDashboard({ gapi }) {
 
     setPatterns(patterns);
 
-    // Find first-time senders
     const newSenders = emails.filter(email => {
       return !email.sender.includes('@trusted-domain.com');
     });
     setFirstTimeSenders(newSenders);
 
-    // Run inference on all email snippets
     if (emails.length > 0) {
       const results = await Promise.all(emails.map(async (email) => {
-        const emailBody = email.snippet; // Get the snippet of each email
         try {
           const response = await fetch('http://127.0.0.1:5000/api/inference', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ email_body: emailBody }),
+            body: JSON.stringify({ email_body: email.snippet }),
           });
 
           if (response.ok) {
-            return await response.json(); // Return the inference result
+            return await response.json();
           } else {
             console.error('Inference error:', response.statusText);
-            return null; // Handle errors
+            return null;
           }
         } catch (error) {
           console.error('Network error:', error);
-          return null; // Handle errors
+          return null;
         }
       }));
 
-      console.log(results); // This will log the inference results for all emails
-      setInferenceResults(results); // Store inference results in state
+      setInferenceResults(results);
+      setRiskScore(calculateRiskScore(results)); // Update risk score based on inference results
     }
   };
 
-  // Render the dashboard
+  const handleMoveToSpam = (emailId) => {
+    gapi.client.gmail.users.messages.modify({
+      userId: 'me',
+      id: emailId,
+      resource: {
+        removeLabelIds: [],
+        addLabelIds: ['SPAM']
+      }
+    }).then(() => {
+      setFirstTimeSenders(prev => prev.filter(email => email.id !== emailId));
+      console.log('Moved to spam:', emailId);
+    }).catch(error => {
+      console.error('Failed to move to spam:', error);
+    });
+  };
+
   return (
-    <div className="p-4 space-y-6">
-      {/* Gmail Component */}
-      <Gmail 
-        gapi={gapi}
-        onEmailsReceived={handleEmailsReceived}
-        onError={handleError}
-      />
-
-      {/* Navigation */}
-      <div className="flex gap-4">
-        <button 
-          className={`px-4 py-2 rounded ${activeView === 'overview' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-          onClick={() => setActiveView('overview')}
-        >
-          Overview
-        </button>
-        <button 
-          className={`px-4 py-2 rounded ${activeView === 'quiz' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-          onClick={() => setActiveView('quiz')}
-        >
-          Security Quiz
-        </button>
-        <button 
-          className={`px-4 py-2 rounded ${activeView === 'patterns' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-          onClick={() => setActiveView('patterns')}
-        >
-          Email Patterns
-        </button>
-      </div>
-
-      {/* Risk Score Section */}
-      <div className="p-4 border rounded-lg">
-        <div className="flex items-center gap-2">
-          <Shield className="h-6 w-6" />
-          <h2 className="font-semibold">Email Security Score</h2>
-        </div>
-        <div className="text-4xl font-bold mb-4">{riskScore}/100</div>
-        <div className="h-2 bg-gray-200 rounded-full">
-          <div 
-            className={`h-2 rounded-full ${
-              riskScore > 70 ? 'bg-green-500' : 
-              riskScore > 40 ? 'bg-yellow-500' : 'bg-red-500'
-            }`}
-            style={{ width: `${riskScore}%` }}
+    <div className="min-h-screen bg-gray-900 p-6 text-gray-100">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Gmail Integration */}
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <Gmail 
+            gapi={gapi}
+            onEmailsReceived={handleEmailsReceived}
+            onError={(error) => console.error('Gmail error:', error)}
           />
         </div>
-      </div>
 
-      {/* Patterns View */}
-      {activeView === 'patterns' && (
-        <div className="p-4 border rounded-lg">
-          <h2 className="font-semibold">Email Activity Patterns</h2>
-          <div className="h-64 overflow-auto border rounded-lg">
-            <div className="p-2">
-              {patterns.length === 0 ? (
-                <p>No pattern data available.</p>
-              ) : (
-                <ul>
-                  {patterns.map((pattern, index) => (
-                    <li key={index} className="flex justify-between">
-                      <span>{pattern.hour}</span>
-                      <span>{pattern.count}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+        {/* Navigation Tabs */}
+        <div className="flex gap-2">
+          {['overview', 'quiz', 'patterns'].map((view) => (
+            <button
+              key={view}
+              onClick={() => setActiveView(view)}
+              className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                activeView === view
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+              }`}
+            >
+              {view.charAt(0).toUpperCase() + view.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Security Score Card */}
+        <div className="bg-gray-800 rounded-lg border border-gray-700">
+          <div className="p-6">
+            <div className="flex items-center justify-between pb-2">
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <Shield className="h-6 w-6 text-blue-400" />
+                Email Security Score
+              </h2>
+            </div>
+            <div className="flex items-end gap-2">
+              <span className="text-5xl font-bold text-blue-400">{Math.round(riskScore)}</span>
+              <span className="text-2xl text-gray-500 mb-1">/100</span>
+            </div>
+            <div className="mt-4 h-3 bg-gray-700 rounded-full overflow-hidden">
+              <div 
+                className={`h-full rounded-full transition-all duration-500 ${
+                  riskScore > 70 ? 'bg-green-500' : 
+                  riskScore > 40 ? 'bg-yellow-500' : 'bg-red-500'
+                }`}
+                style={{ width: `${riskScore}%` }}
+              />
             </div>
           </div>
         </div>
-      )}
 
-      {/* Quiz View */}
-      {activeView === 'quiz' && <SecurityQuiz />}
-
-      {/* Inference Results Display */}
-      <div className="p-4 border rounded-lg">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="h-6 w-6" />
-          <h2 className="font-semibold">Inference Results</h2>
-        </div>
-        <div className="space-y-4 mt-4">
-          {emails.map((email, index) => {
-            const result = inferenceResults[index];
-            const isPhishing = result && result.phishing > result.not_phishing;
-            return (
-              <div key={index} className={`flex flex-col p-4 border rounded-lg ${isPhishing ? 'bg-red-100' : 'bg-green-100'}`}>
-                <div>
-                  <p className="font-medium">Sender: {email.sender}</p>
-                  <p className="text-sm text-gray-500">Date: {new Date(email.date).toLocaleString()}</p>
-                  <p className="text-sm text-gray-500">Subject: {email.subject}</p>
-                  <p className="text-sm">Body: {email.snippet}</p>
-                  <p className={`text-sm ${isPhishing ? 'text-red-500' : 'text-green-500'}`}>
-                    {isPhishing ? 'Phishing Detected' : 'Safe Email'}
-                  </p>
-                </div>
-                {/* You can add buttons here to move or label the email */}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* First Time Senders */}
-      <div className="p-4 border rounded-lg">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="h-6 w-6" />
-          <h2 className="font-semibold">New Senders</h2>
-        </div>
-        <div className="space-y-4 mt-4">
-          {firstTimeSenders.map((sender, index) => (
-            <div key={index} className="flex justify-between items-center p-4 border rounded-lg">
-              <div>
-                <p className="font-medium">{sender.sender}</p>
-                <p className="text-sm text-gray-500">{sender.subject}</p>
-              </div>
-              <div className="space-x-2">
-                <button 
-                  className="px-4 py-2 border rounded hover:bg-gray-100"
-                  onClick={() => moveToFolder(sender.id, 'SPAM')}
-                >
-                  Move to Spam
-                </button>
-                <button 
-                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-                  onClick={() => addLabel(sender.id, 'SUSPICIOUS')}
-                >
-                  Mark Suspicious
-                </button>
+        {/* Patterns View */}
+        {activeView === 'patterns' && (
+          <div className="bg-gray-800 rounded-lg border border-gray-700">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
+                <Clock className="h-5 w-5 text-blue-400" />
+                Email Activity Patterns
+              </h2>
+              <div className="h-96 overflow-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800">
+                {patterns.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-gray-500">
+                    No pattern data available
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {patterns.map((pattern, index) => (
+                      <li key={index} className="flex justify-between items-center p-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors">
+                        <span className="font-medium">{pattern.hour}</span>
+                        <span className="px-3 py-1 bg-blue-900 text-blue-300 rounded-full text-sm">
+                          {pattern.count} emails
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
-          ))}
+          </div>
+        )}
+
+        {activeView === 'quiz' && <SecurityQuiz />}
+
+        {/* Inference Results */}
+        <div className="bg-gray-800 rounded-lg border border-gray-700">
+          <div className="p-6">
+            <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
+              <AlertTriangle className="h-5 w-5 text-blue-400" />
+              Email Analysis Results
+            </h2>
+            <div className="grid gap-4">
+              {emails.map((email, index) => {
+                const result = inferenceResults[index];
+                const isPhishing = result && result.phishing > result.not_phishing;
+                return (
+                  <div 
+                    key={index}
+                    className={`p-4 rounded-lg border transition-all duration-200 ${
+                      isPhishing 
+                        ? 'bg-red-900/30 border-red-800 hover:bg-red-900/40' 
+                        : 'bg-green-900/30 border-green-800 hover:bg-green-900/40'
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-start">
+                        <h3 className="font-medium text-gray-100">{email.sender}</h3>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          isPhishing 
+                            ? 'bg-red-900 text-red-300' 
+                            : 'bg-green-900 text-green-300'
+                        }`}>
+                          {isPhishing ? 'Potential Threat' : 'Safe'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-400">
+                        {new Date(email.date).toLocaleString()}
+                      </p>
+                      <p className="text-sm font-medium text-gray-300">
+                        {email.subject}
+                      </p>
+                      <p className="text-sm text-gray-400 line-clamp-2">
+                        {email.snippet}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// Security Quiz Component
-function SecurityQuiz() {
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [score, setScore] = useState(0);
-  const [quizCompleted, setQuizCompleted] = useState(false);
-
-  const questions = [
-    { question: "What should you never share?", options: ["Password", "Email"], answer: "Password" },
-    { question: "Is it safe to click unknown links?", options: ["Yes", "No"], answer: "No" },
-    { question: "Should you verify sender before opening attachments?", options: ["Yes", "No"], answer: "Yes" },
-  ];
-
-  const handleAnswer = (option) => {
-    if (option === questions[currentQuestion].answer) {
-      setScore(score + 1);
-    }
-    if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
-    } else {
-      setQuizCompleted(true);
-    }
-  };
-
-  if (quizCompleted) {
-    return (
-      <div className="p-4 border rounded-lg">
-        <h2 className="font-semibold">Quiz Completed</h2>
-        <p>Your score: {score}/{questions.length}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-4 border rounded-lg">
-      <h2 className="font-semibold">{questions[currentQuestion].question}</h2>
-      <div className="space-y-2 mt-4">
-        {questions[currentQuestion].options.map((option, index) => (
-          <button 
-            key={index} 
-            className="px-4 py-2 border rounded hover:bg-gray-200"
-            onClick={() => handleAnswer(option)}
-          >
-            {option}
-          </button>
-        ))}
       </div>
     </div>
   );
